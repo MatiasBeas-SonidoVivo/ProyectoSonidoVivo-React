@@ -10,18 +10,16 @@ function Login() {
     const { login } = useContext(AuthContext);
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
-        // Pasamos 'email' y 'password' por separado como lo requiere AuthContext.jsx
-        const res = login(email, password);
-
-        if (!res.ok) {
-            setError(res.error);
-        } else {
-            // Si el login es correcto, redirigimos a la página principal
+        try {
+            // Se llama a login como función asíncrona (con await) hacia la API
+            await login(email, password);
             navigate('/');
+        } catch (err) {
+            setError(err.message || 'Credenciales inválidas');
         }
     };
 

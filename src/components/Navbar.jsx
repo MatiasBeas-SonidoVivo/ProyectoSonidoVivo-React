@@ -4,19 +4,26 @@ import { useAuth } from '../context/AuthContext';
 import { useCarrito } from '../context/CarritoContext';
 
 function Navbar() {
-    const { sesion, logout } = useAuth();
+    // Extraemos usuario (y sesion por si acaso) desde el contexto
+    const { usuario, sesion, logout } = useAuth();
+    const currentUser = usuario || sesion; // Soporta ambos nombres
+    
     const { totalItems } = useCarrito();
     const navigate = useNavigate();
 
     const [menuAbierto, setMenuAbierto] = useState(false);
     const [dropdownAbierto, setDropdownAbierto] = useState(false);
 
-    const esVendedor = sesion?.rol === 'vendedor';
-    const esAdmin = sesion?.rol === 'administrador';
-    const esCliente = sesion?.rol === 'cliente';
-    const esPersonal = esVendedor || esAdmin; // quienes trabajan en la tienda y no compran
+    // Normalizar rol
+    const rolNormalizado = (currentUser?.rol || currentUser?.role || '')
+        .toLowerCase()
+        .replace('role_', '');
 
-    // A dónde lleva el logo según el rol
+    const esVendedor = rolNormalizado === 'vendedor';
+    const esAdmin = rolNormalizado === 'administrador' || rolNormalizado === 'admin';
+    const esCliente = rolNormalizado === 'cliente' || (!esVendedor && !esAdmin && !!currentUser);
+    const esPersonal = esVendedor || esAdmin;
+
     const rutaInicio = esVendedor ? '/vendedor' : esAdmin ? '/admin' : '/';
 
     const cerrarMenus = () => {
@@ -33,7 +40,7 @@ function Navbar() {
     const claseNavLink = ({ isActive }) => 'nav-link' + (isActive ? ' active' : '');
 
     return (
-        <nav className="navbar navbar-expand-lg navbar-dark navbar-custom">
+        <nav className="navbar navbar-expand-lg navbar-dark navbar-custom" style={{ position: 'relative', zIndex: 1000 }}>
             <div className="container-fluid">
                 <Link className="navbar-brand" to={rutaInicio} onClick={cerrarMenus}>
                     Sonido Vivo
@@ -89,7 +96,6 @@ function Navbar() {
                     </ul>
 
                     <ul className="navbar-nav ms-lg-auto align-items-lg-center">
-                        {/* El personal no compra: no ve el carrito */}
                         {!esPersonal && (
                             <li className="nav-item mt-2 mt-lg-0 me-lg-3">
                                 <Link className="nav-link text-white position-relative" to="/carrito" onClick={cerrarMenus}>
@@ -106,10 +112,10 @@ function Navbar() {
                             </li>
                         )}
 
-                        {sesion ? (
-                            <li className="nav-item dropdown mt-2 mt-lg-0">
+                        {currentUser ? (
+                            <li className="nav-item dropdown mt-2 mt-lg-0 position-relative">
                                 <a
-                                    className="nav-link dropdown-toggle text-white"
+                                    className="nav-link dropdown-toggle text-white d-flex align-items-center"
                                     href="#"
                                     role="button"
                                     aria-expanded={dropdownAbierto}
@@ -118,9 +124,18 @@ function Navbar() {
                                         setDropdownAbierto(!dropdownAbierto);
                                     }}
                                 >
-                                    {sesion.email}
+                                    {currentUser.nombre || currentUser.email}
                                 </a>
-                                <ul className={'dropdown-menu dropdown-menu-end' + (dropdownAbierto ? ' show' : '')}>
+                                <ul 
+                                    className={'dropdown-menu dropdown-menu-end' + (dropdownAbierto ? ' show' : '')}
+                                    style={{
+                                        position: 'absolute',
+                                        right: 0,
+                                        left: 'auto',
+                                        minWidth: '160px',
+                                        marginTop: '0.5rem'
+                                    }}
+                                >
                                     {esCliente && (
                                         <li>
                                             <Link className="dropdown-item" to="/pedidos" onClick={cerrarMenus}>Mis pedidos</Link>
@@ -131,7 +146,7 @@ function Navbar() {
                                     </li>
                                     <li><hr className="dropdown-divider" /></li>
                                     <li>
-                                        <button className="dropdown-item" type="button" onClick={handleLogout}>
+                                        <button className="dropdown-item text-danger" type="button" onClick={handleLogout}>
                                             Cerrar sesión
                                         </button>
                                     </li>

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'; 
-import { useAuth } from '../context/AuthContext'; // Recomendado usar la función useAuth
+import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 
 function Registro() {
@@ -9,20 +9,25 @@ function Registro() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
 
-    const { registrar } = useAuth(); // Usamos la función registrar del contexto
+    const { registro } = useAuth(); 
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
-        const res = registrar({ nombre, email, password, confirmPassword });
+        // Validación sencilla de contraseñas en el cliente
+        if (password !== confirmPassword) {
+            setError('Las contraseñas no coinciden');
+            return;
+        }
 
-        if (!res.ok) {
-            setError(res.error);
-        } else {
+        try {
+            await registro({ nombre, email, password });
             alert('¡Cuenta creada exitosamente!');
             navigate('/login');
+        } catch (err) {
+            setError(err.message || 'Error al registrar el usuario');
         }
     };
 

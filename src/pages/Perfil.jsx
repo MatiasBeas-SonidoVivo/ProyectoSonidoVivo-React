@@ -1,30 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 function Perfil() {
-    const { sesion, actualizarPerfil, logout } = useAuth();
+    const { usuario, sesion, actualizarPerfil, logout, loading } = useAuth();
     const navigate = useNavigate();
 
-    const [nombre, setNombre] = useState(sesion?.nombre || '');
+    // Soporte para ambos nombres de variable en AuthContext
+    const currentUser = usuario || sesion;
+
+    const [nombre, setNombre] = useState('');
     const [passwordNueva, setPasswordNueva] = useState('');
     const [passwordConfirmar, setPasswordConfirmar] = useState('');
     const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
 
-    const handleGuardarCambios = (e) => {
+    // Cargar los datos del usuario cuando currentUser esté disponible
+    useEffect(() => {
+        if (currentUser) {
+            setNombre(currentUser.nombre || currentUser.name || '');
+        }
+    }, [currentUser]);
+
+    const handleGuardarCambios = async (e) => {
         e.preventDefault();
         setMensaje({ tipo: '', texto: '' });
 
-        const resultado = actualizarPerfil({ nombre, passwordNueva, passwordConfirmar });
-
-        if (!resultado.ok) {
-            setMensaje({ tipo: 'danger', texto: resultado.error });
+        if (passwordNueva && passwordNueva !== passwordConfirmar) {
+            setMensaje({ tipo: 'danger', texto: 'Las contraseñas no coinciden.' });
             return;
         }
 
-        setPasswordNueva('');
-        setPasswordConfirmar('');
-        setMensaje({ tipo: 'success', texto: 'Perfil actualizado correctamente.' });
+        try {
+            if (actualizarPerfil) {
+                const resultado = await actualizarPerfil({ nombre, passwordNueva, passwordConfirmar });
+                if (resultado && !resultado.ok) {
+                    setMensaje({ tipo: 'danger', texto: resultado.error || 'Error al actualizar' });
+                    return;
+                }
+            }
+            setPasswordNueva('');
+            setPasswordConfirmar('');
+            setMensaje({ tipo: 'success', texto: 'Perfil actualizado correctamente.' });
+        } catch (error) {
+            setMensaje({ tipo: 'danger', texto: error.message || 'Error al actualizar el perfil.' });
+        }
     };
 
     const handleCerrarSesion = () => {
@@ -32,7 +51,27 @@ function Perfil() {
         navigate('/login');
     };
 
-    if (!sesion) return null;
+    // Si aún está consultando la API /usuarios/me
+    if (loading) {
+        return <div className="text-center py-5">Cargando perfil...</div>;
+    }
+
+    // Si terminó de cargar y no existe usuario autenticado
+    if (!currentUser) {
+        return (
+            <div className="container my-5 text-center">
+                <p>No has iniciado sesión.</p>
+                <button className="btn btn-primary" onClick={() => navigate('/login')}>
+                    Ir al Login
+                </button>
+            </div>
+        );
+    }
+
+    // Normalizar el nombre del rol para la insignia (Badge)
+    const rolMostrar = (currentUser.rol || currentUser.role || 'CLIENTE')
+        .replace('ROLE_', '')
+        .toUpperCase();
 
     return (
         <div className="container my-5">
@@ -66,7 +105,7 @@ function Perfil() {
                                     type="email"
                                     className="form-control"
                                     id="email"
-                                    value={sesion.email}
+                                    value={currentUser.email || ''}
                                     disabled
                                 />
                                 <div className="form-text">El correo no se puede modificar.</div>
@@ -75,7 +114,7 @@ function Perfil() {
                             <div className="mb-3">
                                 <label className="form-label text-muted mb-0">Rol Actual</label>
                                 <div>
-                                    <span className="badge bg-primary fs-6">{sesion.rol}</span>
+                                    <span className="badge bg-primary fs-6">{rolMostrar}</span>
                                 </div>
                             </div>
 

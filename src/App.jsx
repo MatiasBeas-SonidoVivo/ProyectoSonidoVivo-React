@@ -7,7 +7,7 @@ import { PedidosProvider } from './context/PedidosContext';
 import { StockProvider } from './context/StockContext';
 import { ProductosProvider } from './context/ProductosContext';
 
-import RutaProtegida from './components/RutaProtegida'
+import RutaProtegida from './components/RutaProtegida';
 
 import Inicio from './pages/Inicio';
 import Productos from './pages/Productos';
@@ -28,24 +28,36 @@ import AdminProductos from './pages/AdminProductos';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 
-const RUTA_POR_ROL = {
-  vendedor: '/vendedor',
-  administrador: '/admin',
-};
-
 function RedirigirSiLogueado({ children }) {
-  const { sesion } = useContext(AuthContext);
+  const { sesion, usuario, loading } = useContext(AuthContext);
   const location = useLocation();
 
-  if (sesion) {
-    const rutaPorRol = RUTA_POR_ROL[sesion.rol] || '/';
+  // Esperar a que el AuthContext termine de consultar /api/usuarios/me
+  if (loading) {
+    return <div className="text-center py-5">Cargando...</div>;
+  }
+
+  const currentUser = usuario || sesion;
+
+  if (currentUser) {
+    const rol = (currentUser.rol || currentUser.role || '').toLowerCase().replace('role_', '');
+    
+    let rutaPorRol = '/';
+    if (rol === 'vendedor') rutaPorRol = '/vendedor';
+    if (rol === 'administrador' || rol === 'admin') rutaPorRol = '/admin';
+
     return <Navigate to={location.state?.from || rutaPorRol} replace />;
   }
+
   return children;
 }
 
 function AppContent() {
-  const { sesion } = useContext(AuthContext);
+  const { loading } = useContext(AuthContext);
+
+  if (loading) {
+    return <div className="text-center py-5">Cargando aplicación...</div>;
+  }
 
   return (
     <>
@@ -58,6 +70,7 @@ function AppContent() {
 
         <Route path="/registro" element={<RedirigirSiLogueado><Registro /></RedirigirSiLogueado>} />
         <Route path="/login" element={<RedirigirSiLogueado><Login /></RedirigirSiLogueado>} />
+        
         <Route
           path="/perfil"
           element={

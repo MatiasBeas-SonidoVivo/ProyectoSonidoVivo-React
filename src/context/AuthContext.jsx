@@ -1,165 +1,101 @@
-import { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
-const CLAVE_SESION = "sonidoVivoSesion";
-const CLAVE_USUARIO = "sonidoVivoUsuarios";
+export const AuthContext = createContext();
 
-function leerJSON(clave, porDefecto) {
+const API_GATEWAY_URL = 'http://localhost:8501/api';
+
+export const AuthProvider = ({ children }) => {
+  const [usuario, setUsuario] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('jwt_token');
+    if (token) {
+      obtenerPerfil(token);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const obtenerPerfil = async (token) => {
     try {
-        const valor = localStorage.getItem(clave);
-        return valor ? JSON.parse(valor) : porDefecto;
-    } catch {
-        return porDefecto;
+      const response = await fetch(`${API_GATEWAY_URL}/usuarios/me`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUsuario(data);
+      } else {
+        logout();
+      }
+    } catch (error) {
+      console.error('Error al obtener perfil:', error);
+      logout();
+    } finally {
+      setLoading(false);
     }
-}
+  };
 
+  const login = async (email, password) => {
+    const response = await fetch(`${API_GATEWAY_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
 
-export const AuthContext = createContext(null);
-
-export function AuthProvider({ children }) {
-
-    const [sesion, setSesion] = useState(() => leerJSON(CLAVE_SESION, null));
-
-    function login(email, password) {
-        if (!email.trim() || !password) {
-            return { ok: false, error: "Complete correo y contraseña" };
-        }
-
-        const usuarios = leerJSON(CLAVE_USUARIO, []);
-        const usuario = usuarios.find(
-            u => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password
-        );
-
-        if (!usuario) {
-            return { ok: false, error: "Correo o contraseña incorrect@" };
-        }
-
-        if (usuario.activo === false) {
-            return { ok: false, error: "Tu cuenta ha sido desactivada" };
-        }
-
-        const nuevaSesion = { email: usuario.email, nombre: usuario.nombre, rol: usuario.rol || "cliente" };
-
-        localStorage.setItem(CLAVE_SESION, JSON.stringify(nuevaSesion));
-        setSesion(nuevaSesion);
-
-        return { ok: true, sesion: nuevaSesion };
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.mensaje || errorData.message || 'Credenciales inválidas');
     }
 
-    function registrar({ nombre, email, password, confirmPassword }) {
-        if (!nombre.trim() || !email.trim() || !password || !confirmPassword) {
-            return { ok: false, error: "Complete todos los campos" };
-        }
+    const data = await response.json();
+    
+    if (data.token) {
+      localStorage.setItem('jwt_token', data.token);
 
-        if (password.length < 6) {
-            return { ok: false, error: "La contraseña debe tener al menos 6 caracteres." };
-        }
+      if (data.usuario) {
+        setUsuario(data.usuario);
+      } else if (data.nombre || data.email) {
+        setUsuario(data);
+      } else {
+        await obtenerPerfil(data.token);
+      }
+    }
+    
+    return data;
+  };
 
-        if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
-            return { ok: false, error: "La contraseña debe tener Mayusculas, minusculas y numero." };
-        }
+  const registro = async (datosRegistro) => {
+    const response = await fetch(`${API_GATEWAY_URL}/auth/registro`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(datosRegistro)
+    });
 
-        if (password !== confirmPassword) {
-            return { ok: false, error: "Las contraseñas no coinciden." };
-        }
-
-        const usuarios = leerJSON(CLAVE_USUARIO, []);
-        const yaExiste = usuarios.some(u => u.email.toLowerCase() === email.trim().toLowerCase());
-
-        if (yaExiste) {
-            return { ok: false, error: "Ya existe una cuenta registrada con ese correo" };
-        }
-
-        let rol = "cliente";
-        if (email.endsWith("@admin.com")) rol = "administrador";
-        else if (email.endsWith("@vendedor.com")) rol = "vendedor";
-
-        usuarios.push({ nombre: nombre.trim(), email: email.trim(), password, rol });
-
-        localStorage.setItem(CLAVE_USUARIO, JSON.stringify(usuarios));
-
-        return { ok: true };
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.mensaje || errorData.message || 'Error en el registro');
     }
 
-    function logout() {
-        localStorage.removeItem(CLAVE_SESION);
-        setSesion(null);
-    }
-    function actualizarPerfil({ nombre, passwordNueva, passwordConfirmar }) {
-        if (!nombre.trim()) {
-            return { ok: false, error: "El nombre no puede estar vacío." };
-        }
+    return await response.json();
+  };
 
-        if (passwordNueva || passwordConfirmar) {
-            if (passwordNueva.length < 6) {
-                return { ok: false, error: "La contraseña debe tener al menos 6 caracteres." };
-            }
+  const logout = () => {
+    localStorage.removeItem('jwt_token');
+    setUsuario(null);
+  };
 
-            if (!/[A-Z]/.test(passwordNueva) || !/[a-z]/.test(passwordNueva) || !/[0-9]/.test(passwordNueva)) {
-                return { ok: false, error: "La contraseña debe tener Mayusculas, minusculas y numero." };
-            }
+  // Exportamos tanto `usuario` como `sesion` (apuntando a usuario) para retrocompatibilidad
+  return (
+    <AuthContext.Provider value={{ usuario, sesion: usuario, loading, login, registro, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
-            if (passwordNueva !== passwordConfirmar) {
-                return { ok: false, error: "Las contraseñas no coinciden." };
-            }
-        }
-
-        const usuarios = leerJSON(CLAVE_USUARIO, []);
-        const usuario = usuarios.find(u => u.email.toLowerCase() === sesion.email.toLowerCase());
-
-        if (usuario) {
-            usuario.nombre = nombre.trim();
-            if (passwordNueva) usuario.password = passwordNueva;
-            localStorage.setItem(CLAVE_USUARIO, JSON.stringify(usuarios));
-        }
-
-        const nuevaSesion = { ...sesion, nombre: nombre.trim() };
-        localStorage.setItem(CLAVE_SESION, JSON.stringify(nuevaSesion));
-        setSesion(nuevaSesion);
-
-        return { ok: true };
-    }
-
-    // ---- Funciones para el panel del administrador ----
-    function obtenerUsuarios() {
-        return leerJSON(CLAVE_USUARIO, []);
-    }
-
-    function cambiarRol(email, nuevoRol) {
-        const usuarios = leerJSON(CLAVE_USUARIO, []);
-        const usuario = usuarios.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-        if (usuario) {
-            usuario.rol = nuevoRol;
-            localStorage.setItem(CLAVE_USUARIO, JSON.stringify(usuarios));
-        }
-    }
-
-    function alternarActivo(email) {
-        const usuarios = leerJSON(CLAVE_USUARIO, []);
-        const usuario = usuarios.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-        if (usuario) {
-            usuario.activo = usuario.activo === false; // false -> true, cualquier otro -> false
-            localStorage.setItem(CLAVE_USUARIO, JSON.stringify(usuarios));
-        }
-    }
-
-    const value = {
-        sesion,
-        login,
-        registrar,
-        logout,
-        actualizarPerfil,
-        obtenerUsuarios,
-        cambiarRol,
-        alternarActivo,
-    };
-
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-    return useContext(AuthContext);
-}
-
-export default AuthProvider;
+export const useAuth = () => useContext(AuthContext);
