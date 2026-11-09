@@ -22,7 +22,7 @@ import MisPedidos from './pages/MisPedidos';
 import VendedorPedidos from './pages/VendedorPedidos';
 import VendedorStock from './pages/VendedorStock';
 
-import AdminUsuarios from './pages/AdminUsuarios';
+import { AdminUsuarios } from './pages/AdminUsuarios'; 
 import AdminProductos from './pages/AdminProductos';
 
 import Navbar from './components/Navbar';

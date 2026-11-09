@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../api/api';
 
 export const AuthContext = createContext();
-
-const API_GATEWAY_URL = 'http://localhost:8501/api';
 
 export const AuthProvider = ({ children }) => {
   const [usuario, setUsuario] = useState(null);
@@ -11,86 +10,64 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem('jwt_token');
     if (token) {
-      obtenerPerfil(token);
+      obtenerPerfil();
     } else {
       setLoading(false);
     }
   }, []);
 
-  const obtenerPerfil = async (token) => {
+  const obtenerPerfil = async () => {
     try {
-      const response = await fetch(`${API_GATEWAY_URL}/usuarios/me`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUsuario(data);
-      } else {
+      const response = await api.get('/usuarios/me');
+      setUsuario(response.data);
+    } catch (error) {
+      console.error('Error al recuperar perfil:', error);
+      // Solo si el servidor rechaza explícitamente el token (401 o 403), cerramos sesión
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
         logout();
       }
-    } catch (error) {
-      console.error('Error al obtener perfil:', error);
-      logout();
     } finally {
       setLoading(false);
     }
   };
 
   const login = async (email, password) => {
-    const response = await fetch(`${API_GATEWAY_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      const data = response.data; // Retorna { token: "...", usuario: { ... } }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.mensaje || errorData.message || 'Credenciales inválidas');
-    }
+      if (data.token) {
+        localStorage.setItem('jwt_token', data.token);
 
-    const data = await response.json();
-    
-    if (data.token) {
-      localStorage.setItem('jwt_token', data.token);
-
-      if (data.usuario) {
-        setUsuario(data.usuario);
-      } else if (data.nombre || data.email) {
-        setUsuario(data);
-      } else {
-        await obtenerPerfil(data.token);
+        if (data.usuario) {
+          setUsuario(data.usuario);
+        } else {
+          await obtenerPerfil();
+        }
       }
+      return data;
+    } catch (error) {
+      const mensaje = error.response?.data?.mensaje || error.response?.data?.message || 'Credenciales inválidas';
+      throw new Error(mensaje);
     }
-    
-    return data;
   };
 
   const registro = async (datosRegistro) => {
-    const response = await fetch(`${API_GATEWAY_URL}/auth/registro`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(datosRegistro)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.mensaje || errorData.message || 'Error en el registro');
+    try {
+      const response = await api.post('/auth/registro', datosRegistro);
+      return response.data;
+    } catch (error) {
+      const mensaje = error.response?.data?.mensaje || error.response?.data?.message || 'Error en el registro';
+      throw new Error(mensaje);
     }
-
-    return await response.json();
   };
 
   const logout = () => {
     localStorage.removeItem('jwt_token');
     setUsuario(null);
+    setLoading(false);
   };
 
-  // Exportamos tanto `usuario` como `sesion` (apuntando a usuario) para retrocompatibilidad
   return (
     <AuthContext.Provider value={{ usuario, sesion: usuario, loading, login, registro, logout }}>
       {children}

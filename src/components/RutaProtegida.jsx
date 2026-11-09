@@ -8,36 +8,39 @@ function RutaProtegida({ children, rol, permitirAdminSiempre = true }) {
 
   const currentUser = usuario || sesion;
 
-  // 1. Mientras se consulta /api/usuarios/me, esperamos
+  
   if (loading) {
-    return <div className="text-center py-5">Cargando...</div>;
+    return (
+      <div className="d-flex justify-content-center align-items-center style={{ minHeight: '60vh' }}">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Cargando...</span>
+        </div>
+      </div>
+    );
   }
 
-  // 2. Si no hay usuario logueado, redirigir al Login
+  // 2. Si ya terminó de cargar y definitivamente NO hay usuario, ahí sí redirigir a Login
   if (!currentUser) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
-  // 3. Normalizar el rol del usuario desde el backend ("ROLE_CLIENTE" -> "cliente")
+  // 3. Normalizar rol
   const rolUsuario = (currentUser.rol || currentUser.role || '')
     .toLowerCase()
     .replace('role_', '');
 
   const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin';
 
-  // 4. Si se especificó un rol requerido para la ruta
   if (rol) {
     const rolRequerido = rol.toLowerCase().replace('role_', '');
     const esClienteRequerido = rolRequerido === 'cliente';
-    
-    // Si la ruta requiere un cliente y el rol actual es cliente (o admin permitido)
-    const tieneAcceso = 
-      rolUsuario === rolRequerido || 
+
+    const tieneAcceso =
+      rolUsuario === rolRequerido ||
       (permitirAdminSiempre && esAdmin) ||
       (esClienteRequerido && (rolUsuario === 'cliente' || rolUsuario === 'user'));
 
     if (!tieneAcceso) {
-      // Redirigir según el rol que tenga la persona
       if (rolUsuario === 'vendedor') return <Navigate to="/vendedor" replace />;
       if (esAdmin) return <Navigate to="/admin" replace />;
       return <Navigate to="/" replace />;
