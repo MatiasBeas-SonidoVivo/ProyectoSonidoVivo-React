@@ -81,7 +81,7 @@ function AdminProductos() {
         setMensaje(`Producto "${producto.nombre}" eliminado.`);
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
@@ -113,17 +113,24 @@ function AdminProductos() {
             descripcion: form.descripcion.trim(),
         };
 
-        if (editandoId !== null) {
-            editarProducto(editandoId, datos);
-            fijarStock(editandoId, stock);
-            setMensaje(`Producto "${datos.nombre}" actualizado.`);
-        } else {
-            const nuevo = agregarProducto(datos);
-            fijarStock(nuevo.id, stock);
-            setMensaje(`Producto "${datos.nombre}" agregado al catálogo.`);
-        }
+        try {
+            if (editandoId !== null) {
+                await editarProducto(editandoId, datos);
+                fijarStock(editandoId, stock);
+                setMensaje(`Producto "${datos.nombre}" actualizado.`);
+            } else {
+                const nuevo = await agregarProducto(datos);
+                if (nuevo?.id) {
+                    fijarStock(nuevo.id, stock);
+                }
+                setMensaje(`Producto "${datos.nombre}" agregado al catálogo.`);
+            }
 
-        cancelar();
+            cancelar();
+        } catch (err) {
+            setError('Error al guardar el producto. Revisa la consola o la conexión con el servidor.');
+            console.error(err);
+        }
     };
 
     return (

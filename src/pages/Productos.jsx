@@ -82,7 +82,8 @@ function Productos() {
                 <div className="row g-4">
                     {productosFiltrados.map((producto) => {
                         // Compatibilidad de stock (prioriza la API / backend, luego el context)
-                        const stockDisponble = producto.stock !== undefined ? producto.stock : (obtenerStock ? obtenerStock(producto.id) : 0);
+                        const stockContext = obtenerStock ? obtenerStock(producto.id) : undefined;
+                        const stockDisponble = stockContext !== undefined ? stockContext : (producto.stock ?? 0);
                         const enCarrito = (carrito || []).find(item => item.id === producto.id)?.cantidad || 0;
 
                         const agotado = stockDisponble === 0;
