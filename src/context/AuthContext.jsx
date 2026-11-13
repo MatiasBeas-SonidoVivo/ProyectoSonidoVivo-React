@@ -22,7 +22,6 @@ export const AuthProvider = ({ children }) => {
       setUsuario(response.data);
     } catch (error) {
       console.error('Error al recuperar perfil:', error);
-      // Solo si el servidor rechaza explícitamente el token (401 o 403), cerramos sesión
       if (error.response && (error.response.status === 401 || error.response.status === 403)) {
         logout();
       }
@@ -34,7 +33,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const response = await api.post('/auth/login', { email, password });
-      const data = response.data; // Retorna { token: "...", usuario: { ... } }
+      const data = response.data;
 
       if (data.token) {
         localStorage.setItem('jwt_token', data.token);

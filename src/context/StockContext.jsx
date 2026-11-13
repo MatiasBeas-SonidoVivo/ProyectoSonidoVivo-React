@@ -1,55 +1,43 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
 import { useProductos } from "./ProductosContext";
-
-const CLAVE_STOCK = "sonidoVivoStock";
-
-function leerCambios() {
-    try {
-        return JSON.parse(localStorage.getItem(CLAVE_STOCK)) || {};
-    } catch {
-        return {};
-    }
-}
+import api from "../api/api";
 
 const StockContext = createContext(null);
 
 export function StockProvider({ children }) {
-    const { catalogo } = useProductos();
-
-    // Guarda solo los CAMBIOS, por ejemplo { "1": 6, "4": 0 }.
-    // Lo que no aparezca aquí usa el stock del catálogo.
-    const [cambios, setCambios] = useState(leerCambios);
-
-    useEffect(() => {
-        localStorage.setItem(CLAVE_STOCK, JSON.stringify(cambios));
-    }, [cambios]);
-
-    // Stock "de fábrica": el que dice el catálogo
-    function stockBase(id) {
-        const producto = catalogo.find(p => p.id === id);
-        return producto ? producto.stock : 0;
-    }
+    const { catalogo, editarProducto, cargarProductos } = useProductos();
 
     function obtenerStock(id) {
-        return cambios[id] !== undefined ? cambios[id] : stockBase(id);
+        const producto = catalogo.find((p) => String(p.id) === String(id));
+        return producto ? Number(producto.stock ?? 0) : 0;
     }
 
-    function descontarStock(lineas) {
-        setCambios(actual => {
-            const nuevo = { ...actual };
-
-            lineas.forEach(({ id, cantidad }) => {
-                const actualProducto = actual[id] !== undefined ? actual[id] : stockBase(id);
-                nuevo[id] = Math.max(0, actualProducto - cantidad);
-            });
-
-            return nuevo;
-        });
+    async function descontarStock(lineas) {
+        try {
+            await Promise.all(
+                lineas.map(({ id, cantidad }) =>
+                    api.patch(`/productos/${id}/descontar-stock`, null, {
+                        params: { cantidad },
+                    })
+                )
+            );
+            await cargarProductos();
+        } catch (err) {
+            console.error("Error al descontar stock en backend:", err);
+        }
     }
 
-    function fijarStock(id, cantidad) {
+    async function fijarStock(id, cantidad) {
+        const producto = catalogo.find((p) => String(p.id) === String(id));
+        if (!producto) return;
+
         const valor = Math.max(0, Number(cantidad) || 0);
-        setCambios(actual => ({ ...actual, [id]: valor }));
+        try {
+            await editarProducto(id, { ...producto, stock: valor });
+        } catch (err) {
+            console.error("Error al actualizar stock en backend:", err);
+            throw err;
+        }
     }
 
     const value = { obtenerStock, descontarStock, fijarStock };

@@ -29,6 +29,7 @@ function Checkout() {
     const [cuponAplicado, setCuponAplicado] = useState(false);
     const [mensajeCupon, setMensajeCupon] = useState({ tipo: '', texto: '' });
     const [error, setError] = useState('');
+    const [enviando, setEnviando] = useState(false);
 
     const [numeroTarjeta, setNumeroTarjeta] = useState('');
     const [vencimiento, setVencimiento] = useState('');
@@ -62,9 +63,9 @@ function Checkout() {
     // ---- Auto-formato de los campos de tarjeta ----
     const handleNumeroTarjeta = (e) => {
         const valor = e.target.value
-            .replace(/\D/g, '')          // solo dígitos
-            .slice(0, 16)                // máximo 16
-            .replace(/(.{4})/g, '$1 ')   // espacio cada 4
+            .replace(/\D/g, '')
+            .slice(0, 16)
+            .replace(/(.{4})/g, '$1 ')
             .trim();
         setNumeroTarjeta(valor);
     };
@@ -82,9 +83,14 @@ function Checkout() {
     };
 
     // ---- Confirmar pedido ----
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        if (!sesion?.email) {
+            setError('Debes iniciar sesión para confirmar un pedido.');
+            return;
+        }
 
         if (lineas.length === 0) {
             setError('Tu carrito está vacío.');
@@ -115,7 +121,7 @@ function Checkout() {
 
             const [mes, anio] = vencimiento.split('/').map(Number);
             const hoy = new Date();
-            const anioActual = hoy.getFullYear() % 100; // 2026 -> 26
+            const anioActual = hoy.getFullYear() % 100;
             const mesActual = hoy.getMonth() + 1;
 
             const estaVencida =
@@ -145,30 +151,39 @@ function Checkout() {
             estado = 'en preparación';
         }
 
-        crearPedido({
-            clienteEmail: sesion.email,
-            productos: lineas.map(({ producto, cantidad }) => ({
-                id: producto.id,
-                nombre: producto.nombre,
-                precio: producto.precio,
-                cantidad,
-            })),
-            subtotal,
-            descuento,
-            total,
-            entrega,
-            direccion: entrega === 'despacho' ? direccion.trim() : null,
-            referencia: entrega === 'despacho' ? referencia : null,
-            metodoPago: pago,
-            estadoPago,
-            estado,
-        });
-        descontarStock(
-            lineas.map(({ producto, cantidad }) => ({ id: producto.id, cantidad }))
-        );
+        setEnviando(true);
+        try {
+            await crearPedido({
+                clienteEmail: sesion.email,
+                items: lineas.map(({ producto, cantidad }) => ({
+                    productoId: producto.id,
+                    nombre: producto.nombre,
+                    precio: producto.precio,
+                    cantidad,
+                })),
+                subtotal,
+                descuento,
+                total,
+                entrega,
+                direccion: entrega === 'despacho' ? direccion.trim() : null,
+                referencia: entrega === 'despacho' ? referencia : null,
+                metodoPago: pago,
+                estadoPago,
+                estado,
+            });
 
-        vaciarCarrito();
-        navigate('/pedidos');
+            descontarStock(
+                lineas.map(({ producto, cantidad }) => ({ id: producto.id, cantidad }))
+            );
+
+            vaciarCarrito();
+            navigate('/pedidos');
+        } catch (err) {
+            console.error(err);
+            setError('No se pudo registrar el pedido en el servidor. Intenta nuevamente.');
+        } finally {
+            setEnviando(false);
+        }
     };
 
     return (
@@ -328,7 +343,9 @@ function Checkout() {
                         <div className="alert alert-danger py-2 small" role="alert">{error}</div>
                     )}
 
-                    <button type="submit" className="btn btn-accent">Confirmar pedido</button>
+                    <button type="submit" className="btn btn-accent" disabled={enviando}>
+                        {enviando ? 'Procesando pedido...' : 'Confirmar pedido'}
+                    </button>
                 </div>
 
                 <div className="col-lg-5">
